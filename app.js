@@ -5,10 +5,10 @@ const path = require("node:path");
 const cors = require('cors');
 const methodOverride = require('method-override');
 const session = require("express-session");
-const prisma = require("./models/prisma");
+const prisma = require("./models/prisma.js");
 const { PrismaSessionStore } = require('@quixo3/prisma-session-store');
 const passport = require("passport");
-const indexRouter = require("./routes/index");
+const indexRouter = require("./routes/index.js");
 
 // 1. Body parser FIRST (so req.body is available to middlewares like Multer)
 app.use(express.urlencoded({ extended: true }));

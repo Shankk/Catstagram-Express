@@ -1,4 +1,4 @@
-const prisma = require("../models/prisma");
+const prisma = require("../models/prisma.js");
 const passport = require("passport");
 const LocalStrategy = require('passport-local').Strategy;
 const bcryptjs = require("bcryptjs");
