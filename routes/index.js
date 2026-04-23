@@ -28,6 +28,8 @@ catRouter.post("/log-in", (req, res, next) => {
   })(req,res,next);
 });
 
+catRouter.post("/follow/:username", ensureAuth, userController.followUser);
+
 catRouter.post('/log-out', userController.logoutPost);
 
 catRouter.post("/sign-up", userController.validateUser, userController.signUpFormPost);
@@ -35,5 +37,7 @@ catRouter.post("/sign-up", userController.validateUser, userController.signUpFor
 // ROUTE-PUTS
 
 // ROUTER-DELETES
+catRouter.delete('/follow/:username', ensureAuth, userController.unfollowUser);
+
 
 module.exports = catRouter;

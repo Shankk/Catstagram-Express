@@ -51,10 +51,6 @@ const validateUser = [
     .isLength({ min: 4, max: 20 }).withMessage(`Code ${codeErr}`)
 ];
 
-// DELETES
-
-// PUT
-
 // GET
 
 async function verifyAuth(req,res) {
@@ -80,8 +76,6 @@ async function userBasic(req,res) {
 };
 
 async function getUserProfile(req,res) {
-  if(!req.isAuthenticated()) return res.status(401).json({message:"Not logged in"})
-  
   const { username } = req.params;
   
   const profile = await prisma.profile.findUnique({
@@ -100,13 +94,53 @@ async function getUserProfile(req,res) {
       }
     }
   })
-  res.json(profile);
+
+  const isFollowing = await prisma.follows.findFirst({
+    where: {
+      followerId: req.user.id,
+      followingId: profile.userId
+    }
+  })
+
+  res.json({profile, isFollowing: Boolean(isFollowing)});
+  
   if(!profile) {
     return res.status(404).json({ error: "Profile not found"});
   }
 };
 
 // POST
+
+async function followUser(req, res) {
+  try {
+    const followerId = req.user.id;
+    const { username } = req.params;
+
+    const targetProfile = await prisma.profile.findUnique({
+      where: { username },
+      select: { userId: true }
+    });
+
+    if(!targetProfile) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const followingId = targetProfile.userId;
+
+    await prisma.follows.create({
+      data: {
+        followerId,
+        followingId
+      }
+    });
+
+    res.json({ success: true, message: "Followed successfully" });
+  } catch (err) {
+    console.error("Follow error:", err);
+    res.status(500).json({ error: "Server error"});
+  }
+  
+}
 
 async function logoutPost(req,res,next) {
   req.session.destroy(err => {
@@ -160,11 +194,50 @@ async function signUpFormPost(req,res, next) {
   }
 }
 
+// PUT
+
+
+
+
+// DELETES
+
+async function unfollowUser(req, res) {
+  try {
+    const followerId = req.user.id;
+    const { username } = req.params;
+
+    const targetProfile = await prisma.profile.findUnique({
+      where: { username },
+      select: { userId: true }
+    });
+
+    if(!targetProfile) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    await prisma.follows.deleteMany({
+      where: {
+        followerId,
+        followingId: targetProfile.userId
+      }
+    });
+
+    res.json({ success: true, message: "Unfollowed successfully" });
+
+  } catch (err) {
+    console.error("Unfollow error:", err);
+    res.status(500).json({ error: "server error"});
+  }
+}
+
+
 module.exports = {
   verifyAuth,
   userBasic,
   getUserProfile,
   logoutPost,
   signUpFormPost,
+  followUser,
+  unfollowUser,
   validateUser
 }
