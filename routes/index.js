@@ -12,6 +12,8 @@ const uploadMiddleware = upload.fields([
 
 // ROUTE-GETS
 catRouter.get("/verify", userController.verifyAuth);
+catRouter.get("/userbasic", userController.userBasic);
+catRouter.get("/profile/:username", userController.getUserProfile);
 
 // ROUTE-POSTS
 catRouter.post("/log-in", (req, res, next) => {
@@ -21,7 +23,7 @@ catRouter.post("/log-in", (req, res, next) => {
 
     req.logIn(user, (err) => {
       if(err) return res.status(500).json({error: "Login failed" });
-      return res.json({ success: true, user: { id: user.id, username: user.name } });
+      return res.json({ success: true });
     })
   })(req,res,next);
 });

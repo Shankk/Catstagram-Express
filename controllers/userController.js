@@ -58,10 +58,52 @@ const validateUser = [
 // GET
 
 async function verifyAuth(req,res) {
-  //console.log('session check:', req.session);
-  //console.log('user check:', req.user);
   if(!req.isAuthenticated()) return res.status(401).json({message:"Not logged in"})
   res.json({ authenticated: true  });
+};
+
+async function userBasic(req,res) {
+  if(!req.isAuthenticated()) return res.status(401).json({message:"Not logged in"})
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    include: {
+      profile: {
+        include: {
+          posts: true
+        }
+      },
+      followers: true,
+      following: true
+    }
+  })
+  res.json({ user: user  });
+};
+
+async function getUserProfile(req,res) {
+  if(!req.isAuthenticated()) return res.status(401).json({message:"Not logged in"})
+  
+  const { username } = req.params;
+  
+  const profile = await prisma.profile.findUnique({
+    where: { username },
+    include: {
+      posts: true,
+      user: {
+        select: {
+          _count: {
+            select: {
+              followers: true,
+              following: true
+            }
+          }
+        }
+      }
+    }
+  })
+  res.json(profile);
+  if(!profile) {
+    return res.status(404).json({ error: "Profile not found"});
+  }
 };
 
 // POST
@@ -89,28 +131,39 @@ async function signUpFormPost(req,res, next) {
     content.password = await bcryptjs.hash(req.body.password, 10);
     const is_member = content.code == '1234';
     const is_admin = content.code == '1234';
-    await prisma.user.create({
+    const user = await prisma.user.create({
       data: {
-        name: content.username,
+        email: content.email,
         password: content.password,
         is_member: is_member,
-        is_admin: is_admin
-      }
+        is_admin: is_admin,
+        profile: {
+          create: {
+            username: content.username ,
+            firstname: content.firstname ,
+            lastname: content.lastname ,
+            dateofbirth: content.dateofbirth
+          }
+        }
+      },
+      include: { profile: true }
     });
-    res.json({success: true, message: "Server Sign Up Success!"});
+    res.status(201).json({success: true, message: "Server Sign Up Success!"});
   } catch(err) {
-    if(err.code == 'P2002' && err.meta?.target?.includes('name')) {
+    if(err.code == 'P2002' && err.meta?.target?.includes('username')) {
       // Prisma Unique constraint
       return res.status(409).json({
         success: false, message: 'Username already exists. Please choose another.'
       });
     }
-    //return next(err);
+    return next(err);
   }
 }
 
 module.exports = {
   verifyAuth,
+  userBasic,
+  getUserProfile,
   logoutPost,
   signUpFormPost,
   validateUser
