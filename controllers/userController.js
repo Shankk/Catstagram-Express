@@ -109,7 +109,137 @@ async function getUserProfile(req,res) {
   }
 };
 
+async function getUserSearch(req,res) {
+  const query = req.query.query;
+  const userId = req.user.id;
+
+  if (!query || query.trim() === "") {
+    return res.json([]);
+  }
+
+  const users = await prisma.user.findMany({
+    where: {
+      id: { not: userId },
+      profile: {
+        username: {
+          contains: query,
+          mode: "insensitive"
+        }
+      }
+    },
+    include: {
+      profile: true
+    },
+    take: 20
+  });
+
+  res.json(users);
+}
+
+async function getAllConversations(req,res) {
+  const userId = req.user.id;
+
+  const conversations = await prisma.conversation.findMany({
+    where: {
+      participants: {
+        some: { userId}
+      }
+    },
+    include: {
+      participants: {
+        include: {
+          user: {
+            include: { profile: true }
+          }
+        }
+      },
+      messages: {
+        orderBy: { createdAt: "desc" },
+        take: 1
+      }
+    },
+    orderBy: {
+      updatedAt: "desc"
+    }
+  });
+
+  res.json(conversations);
+}
+
+async function getConversationMessages(req,res) {
+  const conversationId = Number(req.params.id);
+
+  const messages = await prisma.message.findMany({
+    where: { 
+      conversationId 
+    },
+    orderBy: { 
+      createdAt: "asc" 
+    },
+    include: {
+      sender: {
+        include: { profile: true }
+      }
+    }
+  });
+
+  res.json(messages);
+}
+
 // POST
+
+async function createConversation(req,res) {
+  const userId = req.user.id;
+  const otherUserId = req.body.userId;
+
+  // Check if conversation already exists
+  const existing = await prisma.conversation.findFirst({
+    where: {
+      participants: {
+        every: {
+          userId: { in: [userId, otherUserId] }
+        }
+      }
+    }
+  });
+
+  if (existing) return res.json(existing);
+
+  // Create new conversation
+  const conversation = await prisma.conversation.create({
+    data: {
+      participants: {
+        create: [
+          { userId },
+          { userId: otherUserId }
+        ]
+      }
+    }
+  });
+
+  res.json(conversation);
+}
+
+async function postNewMessage(req,res) {
+  const { conversationId, text } = req.body;
+  const senderId = req.user.id;
+
+  const message = await prisma.message.create({
+    data: {
+      conversationId,
+      senderId,
+      text
+    }
+  });
+
+  // Update conversation timestamp
+  await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { updatedAt: new Date() }
+  });
+
+  res.json(message);
+}
 
 async function followUser(req, res) {
   try {
@@ -198,7 +328,6 @@ async function signUpFormPost(req,res, next) {
 
 
 
-
 // DELETES
 
 async function unfollowUser(req, res) {
@@ -235,9 +364,14 @@ module.exports = {
   verifyAuth,
   userBasic,
   getUserProfile,
+  getUserSearch,
   logoutPost,
   signUpFormPost,
   followUser,
   unfollowUser,
+  getAllConversations,
+  getConversationMessages,
+  createConversation,
+  postNewMessage,
   validateUser
 }

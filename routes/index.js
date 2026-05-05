@@ -14,6 +14,15 @@ const uploadMiddleware = upload.fields([
 catRouter.get("/verify", userController.verifyAuth);
 catRouter.get("/userbasic", userController.userBasic);
 catRouter.get("/profile/:username", userController.getUserProfile);
+catRouter.get("/search-users", userController.getUserSearch);
+
+//CONVERSATIONS
+catRouter.get('/conversations', userController.getAllConversations);
+catRouter.get('/conversations/:id/messages', userController.getConversationMessages);
+
+catRouter.post('/conversations', userController.createConversation);
+catRouter.post('/messages', userController.postNewMessage);
+
 
 // ROUTE-POSTS
 catRouter.post("/log-in", (req, res, next) => {

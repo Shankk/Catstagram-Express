@@ -1,6 +1,10 @@
 require('dotenv').config();
 const express = require("express");
 const app = express();
+const http = require("http");
+const server = http.createServer(app);
+const { Server } = require("socket.io");
+
 const path = require("node:path");
 const cors = require('cors');
 const methodOverride = require('method-override');
@@ -35,25 +39,23 @@ app.use(session({
 }));
 
 // 4. Passport Setup
-//app.use(passport.initialize());
 app.use(passport.session());
 
 // 5. View engine and static files
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
-
 app.use('/uploads', express.static('uploads'));
 
+// 6. CORS
 app.use(cors({
   origin: 'http://localhost:5173',
   credentials: true
 }));
 
-// 6. ROUTER LAST
-
+// 7. ROUTER LAST
 app.use("/", indexRouter);
 
-
+// 8 Error Handler
 app.use((err, req, res, next) => {
   if(err.message == 'File must have an extension') {
     return res.redirect('/file-new?error=missingExtension');
@@ -61,4 +63,33 @@ app.use((err, req, res, next) => {
   next(err);
 })
 
-app.listen(3000, () => console.log("app listening on port 3000!"));
+// SOCKET.IO SETUP
+const io = new Server(server, {
+  cors: {
+    origin: 'http://localhost:5173',
+    credentials: true
+  } 
+});
+
+io.on("connection", socket => {
+  console.log("Socket connected:", socket.id);
+
+  socket.on("join_conversation", conversationId => {
+    socket.join(`conversation_${conversationId}`);
+  });
+
+  socket.on("send_message", async data => {
+    const message = await prisma.message.create({
+      data: {
+        conversationId: data.conversationId,
+        senderId: data.senderId,
+        text: data.text
+      }
+    });
+
+    io.to(`converstaion_${data.conversationId}`).emit("new_message", message);
+  });
+});
+
+// START SERVER
+server.listen(3000, () => console.log("Server + Socket.io listening on port 3000!"));
