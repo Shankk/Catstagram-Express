@@ -79,15 +79,7 @@ io.on("connection", socket => {
   });
 
   socket.on("send_message", async data => {
-    const message = await prisma.message.create({
-      data: {
-        conversationId: data.conversationId,
-        senderId: data.senderId,
-        text: data.text
-      }
-    });
-
-    io.to(`converstaion_${data.conversationId}`).emit("new_message", message);
+    io.to(`converstaion_${data.conversationId}`).emit("new_message", data);
   });
 });
 

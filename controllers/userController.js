@@ -17,33 +17,37 @@ const alphaErr = "must only contain letters.";
 const lengthErr = "must be between 1 and 16 characters.";
 const usernameErr = "must be 4–20 characters, and contain only letters, numbers, or underscores.";
 const passwordErr = "must be 4–20 characters long.";
+const emailErr = "must be a valid email address.";
 const codeErr = "must be valid and 4–20 characters long.";
 
 const validateUser = [
   // First name
-  /* body("first_name")
+  body("firstname")
     .trim()
-    .escape()
     .isAlpha().withMessage(`First name ${alphaErr}`)
     .isLength({ min: 1, max: 16 }).withMessage(`First name ${lengthErr}`),
 
   // Last name
-  body("last_name")
+  body("lastname")
     .trim()
-    .escape()
     .isAlpha().withMessage(`Last name ${alphaErr}`)
-    .isLength({ min: 1, max: 16 }).withMessage(`Last name ${lengthErr}`), */
-
+    .isLength({ min: 1, max: 16 }).withMessage(`Last name ${lengthErr}`),
+  // Email
+  body("email")
+    .trim()
+    .normalizeEmail()
+    .isEmail().withMessage(`Email ${emailErr}`),
   // Username: alphanumeric with underscore, 4–20 chars
   body("username")
     .trim()
-    .escape()
-    .matches(/^[a-zA-Z0-9_]+$/)
+    .toLowerCase()
+    .matches(/^[a-zA-Z0-9_]+$/).withMessage(`Username ${usernameErr}`)
     .isLength({ min: 4, max: 20 }).withMessage(`Username ${usernameErr}`),
 
   // Password: at least 8 chars
   body("password")
     .trim()
+    .isStrongPassword({ minLength: 8, minLowercase: 1, minUppercase: 1, minNumbers: 1})
     .isLength({ min: 4, max: 20 }).withMessage(`Password ${passwordErr}`),
   body("code")
     .trim()
@@ -166,6 +170,31 @@ async function getAllConversations(req,res) {
   res.json(conversations);
 }
 
+async function getConversation(req,res) {
+  const conversationId = Number(req.params.id);
+
+  const conversation = await prisma.conversation.findUnique({
+    where: {id: conversationId},
+    include: {
+      participants: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              profile:{
+                select:{
+                  username: true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  })
+  res.json(conversation);
+}
+
 async function getConversationMessages(req,res) {
   const conversationId = Number(req.params.id);
 
@@ -178,7 +207,13 @@ async function getConversationMessages(req,res) {
     },
     include: {
       sender: {
-        include: { profile: true }
+        select: { 
+          profile: {
+            select: {
+              username: true
+            }
+          } 
+        }
       }
     }
   });
@@ -187,6 +222,36 @@ async function getConversationMessages(req,res) {
 }
 
 // POST
+
+async function verifyPassword(req, res) {
+  const userId = req.user.id;
+  const { password } = req.body;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId }
+  });
+
+  const valid = await bcryptjs.compare(password, user.password);
+
+  res.json({ valid });
+}
+
+async function uploadAvatar(req, res) {
+  const userId = req.user.id;
+
+  if(!req.file) {
+    return res.status(400).json({ error: "No file uploaded" });
+  }
+
+  const filePath = `/uploads/avatars/${req.file.filename}`;
+
+  await prisma.profile.update({
+    where: { id: userId },
+    data: { avatar: filePath }
+  });
+
+  res.json({ success: true, avatar: filePath });
+}
 
 async function createConversation(req,res) {
   const userId = req.user.id;
@@ -279,6 +344,7 @@ async function logoutPost(req,res,next) {
     res.status(200).json({ message: 'Logged out' });
   });
 }
+
 async function signUpFormPost(req,res, next) {
   // 1. Check for validation errors
   console.log('Received Body:', req.body);
@@ -290,43 +356,76 @@ async function signUpFormPost(req,res, next) {
     });
   }
 
-  try {
-    const content = { ...req.body }; // clone to avoid mutating req.body
-    content.password = await bcryptjs.hash(req.body.password, 10);
-    const is_member = content.code == '1234';
-    const is_admin = content.code == '1234';
-    const user = await prisma.user.create({
-      data: {
-        email: content.email,
-        password: content.password,
-        is_member: is_member,
-        is_admin: is_admin,
-        profile: {
-          create: {
-            username: content.username ,
-            firstname: content.firstname ,
-            lastname: content.lastname ,
-            dateofbirth: content.dateofbirth
-          }
+  const content = { ...req.body }; // clone to avoid mutating req.body
+  content.password = await bcryptjs.hash(req.body.password, 10);
+  const is_member = content.code == '1234';
+  const is_admin = content.code == '1234';
+
+  const existingEmail = await prisma.user.findUnique({ where: { email: content.email } });
+  if(existingEmail) return res.status(400).json({ error: "Email already in use" });
+  const existingUsername = await prisma.profile.findUnique({ where: { username: content.username }});
+  if(existingUsername) return res.status(400).json({ error: "Username already taken"});
+
+  const user = await prisma.user.create({
+    data: {
+      email: content.email,
+      password: content.password,
+      is_member: is_member,
+      is_admin: is_admin,
+      profile: {
+        create: {
+          username: content.username ,
+          firstname: content.firstname ,
+          lastname: content.lastname ,
+          dateofbirth: content.dateofbirth
         }
-      },
-      include: { profile: true }
-    });
-    res.status(201).json({success: true, message: "Server Sign Up Success!"});
-  } catch(err) {
-    if(err.code == 'P2002' && err.meta?.target?.includes('username')) {
-      // Prisma Unique constraint
-      return res.status(409).json({
-        success: false, message: 'Username already exists. Please choose another.'
-      });
-    }
-    return next(err);
-  }
+      }
+    },
+    include: { profile: true }
+  });
+  res.status(201).json({success: true, message: "Server Sign Up Success!"});
 }
 
 // PUT
 
+async function updateProfile(req, res) {
+  const userId = req.user.id;
+  const { firstname, lastname, username, bio, avatar } = req.body;
 
+  const updated = await prisma.profile.update({
+    where: { userId },
+    data: { 
+      firstname,
+      lastname,
+      username,
+      bio,
+      avatar
+    }
+  });
+
+  res.json(updated);
+}
+
+async function updateAccount(req, res) {
+  const userId = req.user.id;
+  const { email, password } = req.body;
+
+  //console.log("EMAIL:", email);
+  //console.log("PASS:", password);
+  
+  const data = { email };
+
+  if(password) {
+    data.password = await bcryptjs.hash(password, 10);
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data
+  });
+
+  res.json({success: true });
+}
 
 // DELETES
 
@@ -359,6 +458,15 @@ async function unfollowUser(req, res) {
   }
 }
 
+async function deleteAccount(req, res) {
+  const userId = req.user.id;
+
+  await prisma.user.delete({
+    where: { id: userId }
+  });
+
+  res.json({ success: true });
+}
 
 module.exports = {
   verifyAuth,
@@ -370,8 +478,14 @@ module.exports = {
   followUser,
   unfollowUser,
   getAllConversations,
+  getConversation,
   getConversationMessages,
   createConversation,
   postNewMessage,
+  updateProfile,
+  updateAccount,
+  uploadAvatar,
+  deleteAccount,
+  verifyPassword,
   validateUser
 }

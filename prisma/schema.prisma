@@ -39,6 +39,7 @@ model Profile {
   lastname    String
   dateofbirth DateTime
   bio         String?
+  avatar      String?
 
   posts Post[]
 
