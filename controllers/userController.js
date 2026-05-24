@@ -13,87 +13,43 @@ function formatDate(date) {
   });
 }
 
-const alphaErr = "must only contain letters.";
-const lengthErr = "must be between 1 and 16 characters.";
-const usernameErr = "must be 4–20 characters, and contain only letters, numbers, or underscores.";
-const passwordErr = "must be 4–20 characters long.";
-const emailErr = "must be a valid email address.";
-const codeErr = "must be valid and 4–20 characters long.";
-
-const validateUser = [
-  // First name
-  body("firstname")
-    .trim()
-    .isAlpha().withMessage(`First name ${alphaErr}`)
-    .isLength({ min: 1, max: 16 }).withMessage(`First name ${lengthErr}`),
-
-  // Last name
-  body("lastname")
-    .trim()
-    .isAlpha().withMessage(`Last name ${alphaErr}`)
-    .isLength({ min: 1, max: 16 }).withMessage(`Last name ${lengthErr}`),
-  // Email
-  body("email")
-    .trim()
-    .normalizeEmail()
-    .isEmail().withMessage(`Email ${emailErr}`),
-  // Username: alphanumeric with underscore, 4–20 chars
-  body("username")
-    .trim()
-    .toLowerCase()
-    .matches(/^[a-zA-Z0-9_]+$/).withMessage(`Username ${usernameErr}`)
-    .isLength({ min: 4, max: 20 }).withMessage(`Username ${usernameErr}`),
-
-  // Password: at least 8 chars
-  body("password")
-    .trim()
-    .isStrongPassword({ minLength: 8, minLowercase: 1, minUppercase: 1, minNumbers: 1})
-    .isLength({ min: 4, max: 20 }).withMessage(`Password ${passwordErr}`),
-  body("code")
-    .trim()
-    .equals('1234')
-    .isLength({ min: 4, max: 20 }).withMessage(`Code ${codeErr}`)
-];
-
 // GET
 
-async function verifyAuth(req,res) {
-  if(!req.isAuthenticated()) return res.status(401).json({message:"Not logged in"})
-  res.json({ authenticated: true  });
-};
-
-async function userBasic(req,res) {
-  if(!req.isAuthenticated()) return res.status(401).json({message:"Not logged in"})
+async function getUserData(req,res) {
   const user = await prisma.user.findUnique({
     where: { id: req.user.id },
     include: {
-      profile: {
-        include: {
-          posts: true
-        }
-      },
+      profile: true,
+      posts: true,
       followers: true,
-      following: true
+      following: true,
+      _count: {
+        select: {
+          followers: true,
+          following: true
+        }
+      }
     }
   })
+
   res.json({ user: user  });
 };
 
 async function getUserProfile(req,res) {
   const { username } = req.params;
   
-  const profile = await prisma.profile.findUnique({
-    where: { username },
-    include: {
+  const user = await prisma.user.findFirst({
+    where: { profile: { username: username} },
+    select: {
+      id: true,
+      profile: true,
       posts: true,
-      user: {
+      followers: true,
+      following: true,
+      _count: {
         select: {
-          _count: {
-            select: {
-              followers: true,
-              following: true
-            }
-          }
+          followers: true,
+          following: true
         }
       }
     }
@@ -102,13 +58,13 @@ async function getUserProfile(req,res) {
   const isFollowing = await prisma.follows.findFirst({
     where: {
       followerId: req.user.id,
-      followingId: profile.userId
+      followingId: user.userId
     }
   })
 
-  res.json({profile, isFollowing: Boolean(isFollowing)});
+  res.json({user, isFollowing: Boolean(isFollowing)});
   
-  if(!profile) {
+  if(!user) {
     return res.status(404).json({ error: "Profile not found"});
   }
 };
@@ -183,7 +139,9 @@ async function getConversation(req,res) {
               id: true,
               profile:{
                 select:{
-                  username: true
+                  username: true,
+                  avatar: true
+                  
                 }
               }
             }
@@ -210,7 +168,8 @@ async function getConversationMessages(req,res) {
         select: { 
           profile: {
             select: {
-              username: true
+              username: true,
+              avatar: true
             }
           } 
         }
@@ -223,17 +182,24 @@ async function getConversationMessages(req,res) {
 
 // POST
 
-async function verifyPassword(req, res) {
-  const userId = req.user.id;
-  const { password } = req.body;
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId }
+async function createPost(req, res) {
+  const userId = req.user.id;
+
+  if(!req.file) {
+    return res.status(400).json({ error: "No image uploaded"})
+  }
+  const filePath = `/uploads/posts/${req.file.filename}`;
+
+  const post = await prisma.post.create({
+    data: {
+      userId,
+      imageUrl: filePath,
+      caption: req.body.caption || ""
+    }
   });
 
-  const valid = await bcryptjs.compare(password, user.password);
-
-  res.json({ valid });
+  res.json({ success: true, post });
 }
 
 async function uploadAvatar(req, res) {
@@ -245,8 +211,21 @@ async function uploadAvatar(req, res) {
 
   const filePath = `/uploads/avatars/${req.file.filename}`;
 
+  // 1. Get old avatar
+  const profile = await prisma.profile.findUnique({
+    where: { userId }
+  });
+  const oldAvatar = profile?.avatar;
+  // 2. Delete old avatar
+  if (oldAvatar) {
+    const fullPath = path.join(process.cwd(), oldAvatar);
+    fs.unlink(fullPath, (err) => {
+      if(err){ console.log("Failed to delete old avatar:", err)};
+    });
+  }
+  // 3. Update new avatar
   await prisma.profile.update({
-    where: { id: userId },
+    where: { userId },
     data: { avatar: filePath }
   });
 
@@ -337,55 +316,6 @@ async function followUser(req, res) {
   
 }
 
-async function logoutPost(req,res,next) {
-  req.session.destroy(err => {
-    if(err) return res.status(500).json({ message: 'Logout failed'});
-    res.clearCookie('connect.sid');
-    res.status(200).json({ message: 'Logged out' });
-  });
-}
-
-async function signUpFormPost(req,res, next) {
-  // 1. Check for validation errors
-  console.log('Received Body:', req.body);
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({
-      errors: errors.array(),
-      oldInput: req.body,
-    });
-  }
-
-  const content = { ...req.body }; // clone to avoid mutating req.body
-  content.password = await bcryptjs.hash(req.body.password, 10);
-  const is_member = content.code == '1234';
-  const is_admin = content.code == '1234';
-
-  const existingEmail = await prisma.user.findUnique({ where: { email: content.email } });
-  if(existingEmail) return res.status(400).json({ error: "Email already in use" });
-  const existingUsername = await prisma.profile.findUnique({ where: { username: content.username }});
-  if(existingUsername) return res.status(400).json({ error: "Username already taken"});
-
-  const user = await prisma.user.create({
-    data: {
-      email: content.email,
-      password: content.password,
-      is_member: is_member,
-      is_admin: is_admin,
-      profile: {
-        create: {
-          username: content.username ,
-          firstname: content.firstname ,
-          lastname: content.lastname ,
-          dateofbirth: content.dateofbirth
-        }
-      }
-    },
-    include: { profile: true }
-  });
-  res.status(201).json({success: true, message: "Server Sign Up Success!"});
-}
-
 // PUT
 
 async function updateProfile(req, res) {
@@ -469,23 +399,23 @@ async function deleteAccount(req, res) {
 }
 
 module.exports = {
-  verifyAuth,
-  userBasic,
+  getUserData,
   getUserProfile,
+  
   getUserSearch,
-  logoutPost,
-  signUpFormPost,
   followUser,
   unfollowUser,
+
   getAllConversations,
   getConversation,
   getConversationMessages,
   createConversation,
   postNewMessage,
+
   updateProfile,
   updateAccount,
   uploadAvatar,
   deleteAccount,
-  verifyPassword,
-  validateUser
+
+  createPost,
 }

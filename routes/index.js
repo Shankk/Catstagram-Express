@@ -1,23 +1,19 @@
 const multer = require('multer');
 const { Router } = require("express");
+const authController = require('../controllers/authController.js');
 const userController = require('../controllers/userController.js');
 const catRouter = Router();
-const passport = require("passport");
 const ensureAuth = require("../middlewares/ensureAuth.js");
-const uploadFile = require("../middlewares/multer.js");
+const { uploadAvatar, uploadPost, fileManagerStorage }= require("../middlewares/multer.js");
 
-const upload = multer({
-  dest: "uploads/avatars/"
-})
-
-const uploadMiddleware = uploadFile.fields([
+/* const uploadMiddleware = uploadFile.fields([
   { name: 'myFile', maxCount: 1},
   { name: 'folder', maxCount: 1}
-])
+]) */
 
 // ROUTE-GETS
-catRouter.get("/verify", userController.verifyAuth);
-catRouter.get("/userbasic", userController.userBasic);
+catRouter.get("/verify", authController.verifyAuth);
+catRouter.get("/user", userController.getUserData);
 catRouter.get("/profile/:username", userController.getUserProfile);
 catRouter.get("/search-users", userController.getUserSearch);
 
@@ -31,21 +27,12 @@ catRouter.post('/messages', userController.postNewMessage);
 
 
 // ROUTE-POSTS
-catRouter.post("/account/verify-password", ensureAuth, userController.verifyPassword);
-catRouter.post("/log-in", (req, res, next) => {
-  passport.authenticate("local", (err, user, info) => {
-    if(err) return res.status(500).json({error: "server error" });
-    if(!user) return res.status(401).json({ error: info.message || "Invalid Credentials"});
-
-    req.logIn(user, (err) => {
-      if(err) return res.status(500).json({error: "Login failed" });
-      return res.json({ success: true });
-    })
-  })(req,res,next);
-});
-catRouter.post('/log-out', userController.logoutPost);
-catRouter.post("/sign-up", userController.validateUser, userController.signUpFormPost);
-catRouter.post("/account/avatar", upload.single("avatar"), userController.uploadAvatar);
+catRouter.post("/account/verify-password", ensureAuth, authController.verifyPassword);
+catRouter.post("/log-in", authController.loginUser);
+catRouter.post('/log-out', authController.logoutUser);
+catRouter.post("/sign-up", authController.validateUser, authController.signupUser);
+catRouter.post("/profile/avatar", uploadAvatar.single("avatar"), userController.uploadAvatar);
+catRouter.post("/profile/post", uploadPost.single("post"), userController.createPost);
 catRouter.post("/follow/:username", ensureAuth, userController.followUser);
 
 // ROUTE-PUTS

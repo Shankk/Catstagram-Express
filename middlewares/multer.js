@@ -3,7 +3,35 @@ const path = require('path');
 const mime = require('mime-types');
 const fs = require('fs');
 
-const storage = multer.diskStorage({
+// AVATAR STORAGE
+const avatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, "..", "uploads", "avatars"));
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${req.user.id}${ext}`);
+  }
+});
+
+const uploadAvatar = multer({ storage: avatarStorage });
+
+// POST STORAGE
+const postStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, "..", "uploads", "posts"));
+  },
+  filename: (req, file, cb) => {
+    const unique = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, unique + ext);
+  }
+});
+
+const uploadPost = multer({ storage: postStorage });
+
+// FILE SYSTEM STORAGE
+const fileManagerStorage = multer.diskStorage({
     destination: (req,file,cb) => {
         const folderName = req.body.folder; // fallback to root
 
@@ -41,6 +69,10 @@ const fileFilter = (req, file, cb) => {
     cb(null, true);
 }
 
-const upload = multer({ storage, fileFilter });
+const uploadFileManager = multer({ storage: fileManagerStorage, fileFilter });
 
-module.exports = upload;
+module.exports = {
+  uploadAvatar,
+  uploadPost,
+  uploadFileManager
+};

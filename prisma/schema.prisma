@@ -21,13 +21,12 @@ model User {
   is_member Boolean @default(false)
   is_admin  Boolean @default(false)
 
-  profile Profile?
-
-  // Followers: users who follow THIS user
-  followers Follows[] @relation("followers")
-
-  // Following: users THIS user follows
+  profile                  Profile?
+  followers                Follows[]                 @relation("followers")
   following                Follows[]                 @relation("following")
+  posts                    Post[]
+  likes                    Like[]
+  comments                 Comment[]
   conversationParticipants ConversationParticipant[]
   messages                 Message[]
 }
@@ -40,8 +39,6 @@ model Profile {
   dateofbirth DateTime
   bio         String?
   avatar      String?
-
-  posts Post[]
 
   user   User @relation(fields: [userId], references: [id])
   userId Int  @unique
@@ -60,13 +57,35 @@ model Follows {
 }
 
 model Post {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
+  userId    Int
   imageUrl  String
   caption   String?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
+  
+  likes     Like[]
+  comments  Comment[]
+  user      User    @relation(fields: [userId], references: [id])
+}
 
-  profile   Profile @relation(fields: [profileId], references: [id])
-  profileId Int
+model Like {
+  id     Int @id @default(autoincrement())
+  userId Int
+  postId Int
+
+  user User @relation(fields: [userId], references: [id])
+  post Post @relation(fields: [postId], references: [id])
+}
+
+model Comment {
+  id     Int @id @default(autoincrement())
+  userId Int
+  postId Int
+
+  text      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  post      Post     @relation(fields: [postId], references: [id])
 }
 
 model Conversation {
