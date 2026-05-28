@@ -56,10 +56,16 @@ model Follows {
   @@unique([followerId, followingId]) // prevents duplicate follows
 }
 
+enum MediaType {
+  IMAGE
+  VIDEO
+}
+
 model Post {
   id        Int       @id @default(autoincrement())
   userId    Int
-  imageUrl  String
+  mediaUrl  String
+  mediaType MediaType @default(IMAGE)
   caption   String?
   createdAt DateTime  @default(now())
   

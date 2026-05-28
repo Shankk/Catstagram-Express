@@ -16,6 +16,8 @@ catRouter.get("/verify", authController.verifyAuth);
 catRouter.get("/user", userController.getUserData);
 catRouter.get("/profile/:username", userController.getUserProfile);
 catRouter.get("/search-users", userController.getUserSearch);
+catRouter.get("/posts/:id", userController.getUserPost);
+catRouter.get("/feed", userController.getUserFeed);
 
 //CONVERSATIONS
 catRouter.get('/conversations', userController.getAllConversations);

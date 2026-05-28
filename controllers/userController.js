@@ -96,6 +96,69 @@ async function getUserSearch(req,res) {
   res.json(users);
 }
 
+async function getUserFeed(req, res) {
+  const userId = req.user.id;
+
+  // Who the user follows
+  const following = await prisma.follows.findMany({
+    where: { followerId: userId },
+    select: { followingId: true }
+  });
+
+  const followingIds = following.map(f => f.followingId);
+
+  // Posts from people you follow
+  const followingPosts = await prisma.post.findMany({
+    where: {
+      userId: {
+        in: followingIds.length > 0 ? followingIds : [0]
+      }
+    },
+    include: {
+      user: { include: { profile: true } },
+      _count: { select: { likes: true, comments: true } }
+    },
+    orderBy: { createdAt: "desc" },
+    take: 20
+  });
+
+  // Discovery posts
+  const discoveryPosts = await prisma.post.findMany({
+    where: {
+      userId: {
+        notIn: [...followingIds, userId]
+      }
+    },
+    include: {
+      user: { include: { profile: true } },
+      _count: { select: { likes: true, comments: true } }
+    },
+    orderBy: { createdAt: "desc" },
+    take: 10
+  });
+
+  // Merge + shuffle
+  const feed = [...followingPosts, ...discoveryPosts].sort(
+    () => Math.random() - 0.5
+  );
+
+  res.json(feed);
+}
+
+async function getUserPost(req, res) {
+
+  const post = await prisma.post.findUnique({
+    where: { id: Number(req.params.id) },
+    include: {
+      user: { include: { profile: true} },
+      comments: { include: { user: { include: { profile: true } } } },
+      likes: true
+    }
+  })
+
+  res.json(post);
+}
+
 async function getAllConversations(req,res) {
   const userId = req.user.id;
 
@@ -189,12 +252,18 @@ async function createPost(req, res) {
   if(!req.file) {
     return res.status(400).json({ error: "No image uploaded"})
   }
+
   const filePath = `/uploads/posts/${req.file.filename}`;
+  const file = req.file;
+
+  const isVideo = file.mimetype.startsWith("video/");
+  const isImage = file.mimetype.startsWith("image/");
 
   const post = await prisma.post.create({
     data: {
       userId,
-      imageUrl: filePath,
+      mediaUrl: filePath,
+      mediaType: isVideo ? "VIDEO" : "IMAGE",
       caption: req.body.caption || ""
     }
   });
@@ -418,4 +487,6 @@ module.exports = {
   deleteAccount,
 
   createPost,
+  getUserPost,
+  getUserFeed
 }
