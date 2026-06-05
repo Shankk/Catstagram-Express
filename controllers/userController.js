@@ -58,7 +58,7 @@ async function getUserProfile(req,res) {
   const isFollowing = await prisma.follows.findFirst({
     where: {
       followerId: req.user.id,
-      followingId: user.userId
+      followingId: user.id
     }
   })
 
@@ -116,7 +116,11 @@ async function getUserFeed(req, res) {
     },
     include: {
       user: { include: { profile: true } },
-      _count: { select: { likes: true, comments: true } }
+      _count: { select: { likes: true, comments: true } },
+      likes: {
+        where: { userId: userId },
+        select: { id: true }
+      }
     },
     orderBy: { createdAt: "desc" },
     take: 20
@@ -145,18 +149,74 @@ async function getUserFeed(req, res) {
   res.json(feed);
 }
 
+async function getSuggested(req, res) {
+  const userId = req.user.id;
+
+  // Get IDs of people the user already follows
+  const following = await prisma.follows.findMany({
+    where: { followerId: userId },
+    select: { followingId: true }
+  });
+
+  const followingIds = following.map(f => f.followingId);
+
+  // Suggested users
+  const suggestions = await prisma.user.findMany({
+    where: {
+      id: {
+        notIn: [...followingIds, userId] // exclude yourself + people you follow
+      }
+    },
+    include: {
+      profile: true,
+      _count: {
+        select: { followers: true }
+      }
+    },
+    orderBy: {
+      followers: {
+        _count: "desc"
+      }
+    },
+    take: 10
+  });
+
+  res.json(suggestions);
+}
+
 async function getUserPost(req, res) {
+  const userId = req.user.id;
 
   const post = await prisma.post.findUnique({
     where: { id: Number(req.params.id) },
     include: {
       user: { include: { profile: true} },
       comments: { include: { user: { include: { profile: true } } } },
-      likes: true
+      _count: { select: { likes: true, comments: true } },
+      likes: {
+        where: { userId: userId },
+        select: { id: true }
+      }
     }
   })
 
   res.json(post);
+}
+
+async function getPostComments(req, res) {
+  const postId = Number(req.params.id);
+
+  const comments = await prisma.comment.findMany({
+    where: { postId },
+    orderBy: { createdAt: "asc" },
+    include: {
+      user: {
+        include: { profile: true}
+      }
+    }
+  });
+
+  res.json(comments);
 }
 
 async function getAllConversations(req,res) {
@@ -227,6 +287,11 @@ async function getConversationMessages(req,res) {
       createdAt: "asc" 
     },
     include: {
+      post: {
+        include: {
+          user: { include: { profile: true }}
+        }
+      },
       sender: {
         select: { 
           profile: {
@@ -244,7 +309,6 @@ async function getConversationMessages(req,res) {
 }
 
 // POST
-
 
 async function createPost(req, res) {
   const userId = req.user.id;
@@ -269,6 +333,41 @@ async function createPost(req, res) {
   });
 
   res.json({ success: true, post });
+}
+
+async function likeUserPost(req, res) {
+  const userId = req.user.id;
+  const postId = Number(req.params.id);
+
+  try {
+    await prisma.like.create({
+      data: { userId, postId }
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    // If liked, ignore request.
+    res.json({ success: false, message: "Already liked" });
+  }
+}
+
+async function sendPostComment(req, res) {
+  const postId = Number(req.params.id);
+  const userId = req.user.id;
+  const { text } = req.body;
+
+  const comment = await prisma.comment.create({
+    data: {
+      postId,
+      userId,
+      text
+    },
+    include: {
+      user: { include: { profile: true }}
+    }
+  });
+
+  res.json(comment);
 }
 
 async function uploadAvatar(req, res) {
@@ -333,10 +432,11 @@ async function createConversation(req,res) {
   res.json(conversation);
 }
 
-async function postNewMessage(req,res) {
-  const { conversationId, text } = req.body;
+async function sendUserMessage(req,res) {
+  const conversationId = Number(req.params.id);
   const senderId = req.user.id;
-
+  const { text } = req.body;
+  
   const message = await prisma.message.create({
     data: {
       conversationId,
@@ -349,6 +449,29 @@ async function postNewMessage(req,res) {
   await prisma.conversation.update({
       where: { id: conversationId },
       data: { updatedAt: new Date() }
+  });
+
+  res.json(message);
+}
+
+async function sendUserPost(req,res) {
+  const conversationId = Number(req.params.id);
+  const senderId = req.user.id;
+  const { postId } = req.body;
+
+  const message = await prisma.message.create({
+    data: {
+      conversationId,
+      senderId,
+      postId
+    },
+    include: {
+      post: {
+        include: {
+          user: { include: {profile: true}}
+        }
+      }
+    }
   });
 
   res.json(message);
@@ -467,6 +590,17 @@ async function deleteAccount(req, res) {
   res.json({ success: true });
 }
 
+async function unlikeUserPost(req, res) {
+  const userId = req.user.id;
+  const postId = Number(req.params.id);
+
+  await prisma.like.deleteMany({
+    where: { userId, postId }
+  });
+
+  res.json({ success: true });
+}
+
 module.exports = {
   getUserData,
   getUserProfile,
@@ -479,7 +613,8 @@ module.exports = {
   getConversation,
   getConversationMessages,
   createConversation,
-  postNewMessage,
+  sendUserMessage,
+  sendUserPost,
 
   updateProfile,
   updateAccount,
@@ -488,5 +623,10 @@ module.exports = {
 
   createPost,
   getUserPost,
-  getUserFeed
+  getPostComments,
+  sendPostComment,
+  getUserFeed,
+  getSuggested,
+  likeUserPost,
+  unlikeUserPost
 }
