@@ -28,13 +28,14 @@ app.use(session({
     checkPeriod: 2 * 60 * 1000,          
     dbRecordIdIsSessionId: true, 
   }),
-  secret: 'cat',     
+  secret: process.env.SECRET,     
   resave: false,
   saveUninitialized: false,
   cookie: {
     maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
-    secure: false,                  // true if you're using HTTPS
+    secure: true,                  // true if you're using HTTPS
     httpOnly: true,
+    sameSite: 'none'
   }
 }));
 
