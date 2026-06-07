@@ -42,9 +42,9 @@ app.use(session({
 app.use(passport.session());
 
 // 5. View engine and static files
-app.set("view engine", "ejs");
-app.set("views", path.join(__dirname, "views"));
-app.use('/uploads', express.static('uploads'));
+//app.set("view engine", "ejs");
+//app.set("views", path.join(__dirname, "views"));
+//app.use('/uploads', express.static('uploads'));
 
 // 6. CORS
 app.use(cors({

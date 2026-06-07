@@ -1,9 +1,11 @@
 const bcryptjs = require("bcryptjs");
-const { body, validationResult } = require("express-validator");
+const { body, validationResult, Result } = require("express-validator");
 const prisma = require("../models/prisma.js");
 const path = require('path');
 const fs = require('fs');
 const upload = require("../middlewares/multer.js");
+const cloudinary = require("../middlewares/cloudinary.js");
+const { error } = require("console");
 
 function formatDate(date) {
   return new Date(date).toLocaleDateString("en-US", {
@@ -310,7 +312,7 @@ async function getConversationMessages(req,res) {
 
 // POST
 
-async function createPost(req, res) {
+async function uploadPostFile(req, res) {
   const userId = req.user.id;
 
   if(!req.file) {
@@ -333,6 +335,51 @@ async function createPost(req, res) {
   });
 
   res.json({ success: true, post });
+}
+
+async function uploadPostCloud(req, res) {
+  try {
+    const userId = req.user.id;
+
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    // Upload to Cloudinary using upload_stream
+    const uploadResult = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: "posts",
+          resource_type: "auto" // auto-detect image or video
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+
+      stream.end(req.file.buffer);
+    });
+
+    // Cloudinary gives us:
+    // uploadResult.secure_url
+    // uploadResult.resource_type ("image" or "video")
+
+    const post = await prisma.post.create({
+      data: {
+        userId,
+        mediaUrl: uploadResult.secure_url,
+        mediaType: uploadResult.resource_type.toUpperCase(), // "IMAGE" or "VIDEO"
+        caption: req.body.caption || ""
+      }
+    });
+
+    res.json({ success: true, post });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Post upload failed" });
+  }
 }
 
 async function likeUserPost(req, res) {
@@ -370,7 +417,7 @@ async function sendPostComment(req, res) {
   res.json(comment);
 }
 
-async function uploadAvatar(req, res) {
+async function uploadAvatarFile(req, res) {
   const userId = req.user.id;
 
   if(!req.file) {
@@ -398,6 +445,47 @@ async function uploadAvatar(req, res) {
   });
 
   res.json({ success: true, avatar: filePath });
+}
+
+async function uploadAvatarCloud(req, res) {
+  try {
+    const userId = req.user.id;
+
+    if(!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    // Upload to Cloudinary using upload_stream
+    const uploadResult = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream({
+          folder: "avatars",
+          public_id: `avatar_${userId}`, // overwrite old avatar auto
+          overwrite: true,
+          resource_type: "image"
+        },
+        (error, result) => {
+          if(error) reject(error);
+          else resolve(result);
+        }
+      );
+
+      stream.end(req.file.buffer);
+    });
+
+    //Save Cloudinary URL in Database.
+    const updated = await prisma.profile.update({
+      where: { userId},
+      data: { avatar: uploadResult.secure_url }
+    });
+
+    res.json({
+      message: "Avatar updated succesfully",
+      avatar: uploadResult.secure_url
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({error: "Avatar upload failed"});
+  }
 }
 
 async function createConversation(req,res) {
@@ -618,10 +706,12 @@ module.exports = {
 
   updateProfile,
   updateAccount,
-  uploadAvatar,
+  uploadAvatarFile,
+  uploadAvatarCloud,
   deleteAccount,
 
-  createPost,
+  uploadPostFile,
+  uploadPostCloud,
   getUserPost,
   getPostComments,
   sendPostComment,

@@ -14,8 +14,6 @@ const avatarStorage = multer.diskStorage({
   }
 });
 
-const uploadAvatar = multer({ storage: avatarStorage });
-
 // POST STORAGE
 const postStorage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -27,8 +25,6 @@ const postStorage = multer.diskStorage({
     cb(null, unique + ext);
   }
 });
-
-const uploadPost = multer({ storage: postStorage });
 
 // FILE SYSTEM STORAGE
 const fileManagerStorage = multer.diskStorage({
@@ -69,7 +65,17 @@ const fileFilter = (req, file, cb) => {
     cb(null, true);
 }
 
+
+// FOR USING DISK STORAGE
+//const uploadAvatar = multer({ storage: avatarStorage });
+//const uploadPost = multer({ storage: postStorage });
 const uploadFileManager = multer({ storage: fileManagerStorage, fileFilter });
+
+
+// FOR CLOUD BASED STORAGE
+const uploadAvatar = multer({ storage: multer.memoryStorage() });
+const uploadPost = multer({ storage: multer.memoryStorage() });
+
 
 module.exports = {
   uploadAvatar,

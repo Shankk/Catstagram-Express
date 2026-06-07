@@ -81,7 +81,7 @@ model Like {
   postId Int
 
   user User @relation(fields: [userId], references: [id])
-  post Post @relation(fields: [postId], references: [id])
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 }
 
 model Comment {
@@ -92,7 +92,7 @@ model Comment {
   createdAt DateTime @default(now())
   
   user      User     @relation(fields: [userId], references: [id])
-  post      Post     @relation(fields: [postId], references: [id])
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
 }
 
 model Conversation {
@@ -120,7 +120,7 @@ model Message {
   senderId       Int
   text           String?
   postId         Int?
-  post           Post?    @relation(fields: [postId], references: [id])
+  post           Post?    @relation(fields: [postId], references: [id], onDelete: SetNull)
   createdAt      DateTime @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id])

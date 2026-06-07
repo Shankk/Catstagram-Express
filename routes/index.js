@@ -36,8 +36,8 @@ catRouter.post("/account/verify-password", ensureAuth, authController.verifyPass
 catRouter.post("/log-in", authController.loginUser);
 catRouter.post('/log-out', authController.logoutUser);
 catRouter.post("/sign-up", authController.validateUser, authController.signupUser);
-catRouter.post("/profile/avatar", uploadAvatar.single("avatar"), userController.uploadAvatar);
-catRouter.post("/profile/post", uploadPost.single("post"), userController.createPost);
+catRouter.post("/profile/avatar", uploadAvatar.single("avatar"), userController.uploadAvatarCloud);
+catRouter.post("/profile/post", uploadPost.single("post"), userController.uploadPostCloud);
 catRouter.post("/follow/:username", ensureAuth, userController.followUser);
 catRouter.post("/posts/:id/like", ensureAuth, userController.likeUserPost);
 catRouter.post("/posts/:id/comments", userController.sendPostComment);
