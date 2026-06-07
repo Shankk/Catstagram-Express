@@ -48,7 +48,7 @@ app.use(passport.session());
 
 // 6. CORS
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin:  [ 'http://localhost:5173', "https://catstagram-official.netlify.app"],
   credentials: true
 }));
 
@@ -66,7 +66,7 @@ app.use((err, req, res, next) => {
 // SOCKET.IO SETUP
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:5173',
+    origin: [ 'http://localhost:5173', "https://catstagram-official.netlify.app"],
     credentials: true
   } 
 });
@@ -84,4 +84,4 @@ io.on("connection", socket => {
 });
 
 // START SERVER
-server.listen(3000, () => console.log("Server + Socket.io listening on port 3000!"));
+server.listen(3000, () => console.log("Server + Socket.io listening..."));
