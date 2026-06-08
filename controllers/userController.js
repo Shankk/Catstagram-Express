@@ -18,6 +18,14 @@ function formatDate(date) {
 // GET
 
 async function getUserData(req,res) {
+  // Check to see if user is logged in.
+  if(!req.user || !req.user.id) {
+    return res.status(401).json({
+      error: "Not Authenticated",
+      message: "User is not logged in."
+    })
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: req.user.id },
     include: {

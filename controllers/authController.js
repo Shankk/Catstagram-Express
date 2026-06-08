@@ -47,7 +47,9 @@ const validateUser = [
 
 //GET
 async function verifyAuth(req,res) {
-  if(!req.isAuthenticated()) return res.status(401).json({message:"Not logged in"})
+  if(!req.isAuthenticated()) {
+    return res.status(401).json({message:"Not logged in"})
+  }
   res.json({ authenticated: true  });
 };
 
