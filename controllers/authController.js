@@ -56,15 +56,21 @@ async function verifyAuth(req,res) {
 //POST
 
 async function loginUser(req,res) {
-    passport.authenticate("local", (err, user, info) => {
-        if(err) return res.status(500).json({error: "server error" });
-        if(!user) return res.status(401).json({ error: info.message || "Invalid Credentials"});
+  passport.authenticate("local", (err, user, info) => {
+    if(err) return res.status(500).json({error: "server error" });
+    if(!user) return res.status(401).json({ error: info.message || "Invalid Credentials"});
 
-        req.logIn(user, (err) => {
-            if(err) return res.status(500).json({error: "Login failed" });
-            return res.json({ success: true });
-        })
-    })(req,res);
+    req.logIn(user, (err) => {
+      if(err) return res.status(500).json({error: "Login failed" });
+
+      //Force session save.
+      req.session.save((err) => {
+        if(err) return res.status(500).json({error: "Session save failed" });
+        return res.json({ success: true });
+      });
+      
+    })
+  })(req,res);
 }
 
 async function logoutUser(req,res,next) {
