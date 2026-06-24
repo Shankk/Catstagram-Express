@@ -60,16 +60,14 @@ async function loginUser(req,res) {
     if(err) return res.status(500).json({error: "server error" });
     if(!user) return res.status(401).json({ error: info.message || "Invalid Credentials"});
 
-    req.logIn(user, (err) => {
+    req.logIn(user, { keepSessionInfo: true }, (err) => {
       if(err) return res.status(500).json({error: "Login failed" });
-
-      //Force session save.
+      
       req.session.save((err) => {
-        if(err) return res.status(500).json({error: "Session save failed" });
+        if(err) return res.status(500).json({ error: "Session save failed"});
         return res.json({ success: true });
       });
-      
-    })
+    });
   })(req,res);
 }
 

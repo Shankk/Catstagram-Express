@@ -23,6 +23,7 @@ app.use(methodOverride('_method'));
 
 // 3. Session Middleware
 require('./middlewares/passport.js');
+app.set('trust proxy', 1);
 app.use(session({
   store: new PrismaSessionStore(prisma, {
     checkPeriod: 2 * 60 * 1000,          
