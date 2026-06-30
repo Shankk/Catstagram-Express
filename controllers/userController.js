@@ -118,7 +118,7 @@ async function getUserFeed(req, res) {
   const followingIds = following.map(f => f.followingId);
 
   // Posts from people you follow
-  const followingPosts = await prisma.post.findMany({
+  let followingPosts = await prisma.post.findMany({
     where: {
       userId: {
         in: followingIds.length > 0 ? followingIds : [0]
@@ -136,8 +136,14 @@ async function getUserFeed(req, res) {
     take: 20
   });
 
+   // Add isFollower flag
+  followingPosts = followingPosts.map(post => ({
+    ...post,
+    isFollower: true
+  }));
+
   // Discovery posts
-  const discoveryPosts = await prisma.post.findMany({
+  let discoveryPosts = await prisma.post.findMany({
     where: {
       userId: {
         notIn: [...followingIds, userId]
@@ -150,6 +156,12 @@ async function getUserFeed(req, res) {
     orderBy: { createdAt: "desc" },
     take: 10
   });
+
+  // Add isFollower flag
+  discoveryPosts = discoveryPosts.map(post => ({
+    ...post,
+    isFollower: false
+  }));
 
   // Merge + shuffle
   const feed = [...followingPosts, ...discoveryPosts].sort(

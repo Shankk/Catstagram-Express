@@ -6,7 +6,7 @@ const passport = require("passport");
 const alphaErr = "must only contain letters.";
 const lengthErr = "must be between 1 and 16 characters.";
 const usernameErr = "must be 4–20 characters, and contain only letters, numbers, or underscores.";
-const passwordErr = "must be 4–20 characters long.";
+const passwordErr = "8–20 chars, must include 1 uppercase, 1 lowercase, and a number.";
 const emailErr = "must be a valid email address.";
 const codeErr = "must be valid and 4–20 characters long.";
 
@@ -38,7 +38,7 @@ const validateUser = [
   body("password")
     .trim()
     .isStrongPassword({ minLength: 8, minLowercase: 1, minUppercase: 1, minNumbers: 1})
-    .isLength({ min: 4, max: 20 }).withMessage(`Password ${passwordErr}`),
+    .isLength({ min: 8, max: 20 }).withMessage(`Password ${passwordErr}`),
   body("code")
     .trim()
     .equals('1234')
